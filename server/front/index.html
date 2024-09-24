@@ -1,0 +1,63 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>Login</title>
+	<meta name="description" content="Blaze is designed to give you structure and a good starting point for your website.">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" href="/css/blaze.min.css">
+	<!-- <link rel="stylesheet" href="/css/blaze.animations.min.css"> -->
+</head>
+<body class="c-text">
+	<style>
+    body {
+        background-color: #f7f7f7;
+    }
+
+    main {
+        height: 480px;
+    }
+</style>
+<main class="u-center-block">
+    <div class="u-center-block__content">
+        <h1 class="c-heading">Please login</h1>
+        <!-- <form action="#"> -->
+            <div class="o-form-element">
+                <div class="c-input-group c-input-group--stacked">
+                    <div class="o-field">
+                        <input id="user" class="c-field" type='text' placeholder='Name'  />
+                    </div>
+                    <div class="o-field">
+                        <input id="pass" class="c-field" placeholder="Password" type="password">
+                    </div>
+                </div>
+            </div>
+            <label class="o-form-element c-label">
+                <input type="checkbox">
+                Remember me
+            </label>
+            <div class="o-form-element">
+                <button class="c-button c-button--brand c-button--block" type="submit" onclick="login();">Login</button>
+            </div>
+            
+            <div class="hint">
+              试用用户名口令: <br>admin:pass0, user1:pass1, user2:pass2 <br>
+              请 F12 查看 控制台 输出
+            </div>
+            
+            <div style="margin: 1em 0; text-align: center;">
+              <button class="btn" style="background: #8aa;" onclick="getDataTest();"> 测试数据 </button>
+              <button class="btn" style="background: #8aa;" onclick="logout();"> 登出 </button>
+            </div>
+            
+            
+        <!-- </form> -->
+    </div>
+</main>
+</body>
+<script type='text/javascript' src='js/common.js' ></script>
+</script>  
+
+
+</html>

@@ -1,0 +1,124 @@
+<html>
+<head>
+<link rel="stylesheet" href="css/blaze.min.css">
+<link rel="stylesheet" href="css/sk-layout.css">
+<link rel="stylesheet" href="css/sk.css">
+<script type='text/javascript' src='js/common.js' ></script>
+</head>
+<body >
+
+
+<div class="skpage-container">
+<!-- 头部开始  -->
+<skpage-header class="skpage-background">
+    <span style="float:left"><img src="../images/logo.png" title="shenku" /> </span>
+    <span onclick="test();"><h1 >
+    主回路与继电器控制
+    </h1></span>
+</skpage-header><!-- 头部结束  -->
+
+
+<div class="skpage-body">
+  <skpage-main id="skpage-main" class="skpage-content skpage-background">
+  
+  
+  content1
+  
+  </skpage-main>
+  
+  <!-- 左边栏开始  -->
+  <skpage-left class="skpage-left skpage-background ">
+  
+  
+  <nav class="">
+			<div class="sk-goto c-nav__item c-nav__item--success"><i class="fa fa-plus"></i> 一览</div>
+			<div class="sk-goto c-nav__item c-nav__item--brand">主回路与继电器</div>
+			<div class="sk-goto c-nav__item c-nav__item--info">矩阵控制</div>
+			<div class="sk-goto c-nav__item c-nav__item--success" page="status.html">状态</div>
+			<div class="sk-goto c-nav__item">日志 </div>
+			<div class="sk-goto c-nav__item">告警 <span class="c-badge">5</span></div>
+			<div class="sk-goto c-nav__item c-nav__item--error">报警 <span class="c-badge">2</span></div>
+			<div class="sk-goto c-nav__item">设置</div>
+			<div class="sk-goto c-nav__item" onclick="getDataTest();">测试数据</div>
+			<div class="sk-goto c-nav__item" onclick="logout();">登出</div>
+      
+		</nav>
+  </skpage-left><!-- 左边栏结束  -->
+  
+  <!-- 右边栏开始  -->
+  <skpage-aside class="skpage-right skpage-background">
+  
+  aside
+  
+  
+  
+  </skpage-aside><!-- 右边栏结束  -->
+  
+</div>
+
+<!-- 底部栏开始  -->
+<skpage-footer class="skpage-background">
+智能储能控制系统 神库科技 Copyright 2012-2024 
+
+</skpage-footer><!-- 底部栏结束  -->
+
+
+
+</div>
+<script>
+function test()
+{
+
+    fetch('rjs', {
+        method: 'POST', body: JSON.stringify({api:"request",data:{devid: 123}),
+      })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Success:", data);
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+      });
+        
+        
+
+/*console.log("test .............");
+const data = { devid: "123" };
+
+fetch("/api/rjs", {
+  method: "POST", // or 'PUT'
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify(data),
+})
+  .then((response) => response.json())
+  .then((data) => {
+    console.log("Success:", data);
+  })
+  .catch((error) => {
+    console.error("Error:", error);
+  });*/
+}
+
+function loadpage()
+{
+  console.log(this);
+  let page = this.getAttribute("page");
+  console.log(page);
+  document.getElementById("skpage-main").innerHTML = '<object type="text/html" data="'+page+'" width="100%" height="100%"></object>';
+}
+
+var elements = document.getElementsByClassName("sk-goto");
+      [...elements].forEach((element) => {
+        element.addEventListener("click", loadpage);
+      });
+
+/*document.getElementsByClassName("").addEventListener("click", function () {
+    console.log(this);
+  },false);*/
+
+
+</script>  
+</body>
+</html>
