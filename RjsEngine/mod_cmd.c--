@@ -1,0 +1,288 @@
+#include "mod_cmd.h"
+
+#include "librdkafka/rdkafka.h"
+
+
+#include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+#include <termios.h> /*termio.h for serial IO api*/
+#include <errno.h> 
+
+// quote extCan & extGPIO  from /Extentsions
+extern int canSend(const char * device, const char * can_frame);
+extern int gpioSet(const char* pinGroup, const char * pinGPIO, int dat);
+extern void mg_hexdump(const void *buf, size_t len);
+// extern rd_kafka_t *rdkafka;
+
+
+/* static char version_build_string[32] = {0};
+
+// demo: 获取版本(简化成时间表示) 
+static void js_core_gen_version()
+{
+  char s_month[5];
+  int month, day, year;
+  int hour, min, sec;
+
+  static const char month_names[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+  sscanf(__DATE__, "%s %d %d", s_month, &day, &year);
+  month = (strstr(month_names, s_month) - month_names) / 3 + 1;
+
+  sscanf(__TIME__, "%d:%d:%d", &hour, &min, &sec);
+  snprintf(version_build_string, sizeof(version_build_string), "%04d-%02d-%02dT%02d:%02d:%02dZ",
+           year, month, day, hour, min, sec);
+}
+
+// demo: 读取
+static JSValue js_core_read(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+  return JS_NewString(ctx, version_build_string);
+}
+
+// demo: 写入 
+static JSValue js_core_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+  const char * str = JS_ToCString(ctx, argv[0]);
+  strcpy(version_build_string, str);
+  return JS_NewString(ctx, version_build_string);
+} */
+
+
+
+
+static JSValue js_can_send(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    // void(argc);
+    const char * device = JS_ToCString(ctx, argv[0]);
+    const char * frame = JS_ToCString(ctx, argv[1]);
+    int ret = canSend(device, frame);
+  
+  
+    return JS_NewInt32(ctx, ret);
+}
+
+static JSValue js_gpio_set(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    // void(argc);
+    const char * pinGroup = JS_ToCString(ctx, argv[0]);
+    const char * pin = JS_ToCString(ctx, argv[1]);
+    int dat;
+    if (JS_ToInt32(ctx, &dat, argv[2])) return JS_EXCEPTION;
+
+    int ret = gpioSet(pinGroup, pin, dat);
+  
+  
+    return JS_NewInt32(ctx, ret);
+}
+
+int uart_set_parameters(const char * uart, int speed, int parity)
+{
+        int fd = open(uart, O_RDWR);
+        
+        struct termios tty;
+        memset (&tty, 0, sizeof tty);
+        if (tcgetattr (fd, &tty) != 0) /* save current serial port settings */
+        {
+            printf("__LINE__ = %d, error %s\n", __LINE__, strerror(errno));
+            return -1;
+        }
+
+        cfsetospeed (&tty, speed);
+        cfsetispeed (&tty, speed);
+
+        tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;     // 8-bit chars
+        // disable IGNBRK for mismatched speed tests; otherwise receive break
+        // as \000 chars
+        tty.c_iflag &= ~IGNBRK;         // disable break processing
+        tty.c_lflag = 0;                // no signaling chars, no echo,
+                                        // no canonical processing
+        tty.c_oflag = 0;                // no remapping, no delays
+        tty.c_cc[VMIN]  = 1;            // read doesn't block
+        tty.c_cc[VTIME] = 0;            // 0.5 seconds read timeout
+
+        tty.c_iflag &= ~(IXON | IXOFF | IXANY); // shut off xon/xoff ctrl
+
+        tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls,
+                                        // enable reading
+        tty.c_cflag &= ~(PARENB | PARODD);      // shut off parity
+        tty.c_cflag |= parity;
+        tty.c_cflag &= ~CSTOPB;
+        tty.c_cflag &= ~CRTSCTS;
+
+        if (tcsetattr (fd, TCSANOW, &tty) != 0)
+        {
+                printf("__LINE__ = %d, error %s\n", __LINE__, strerror(errno));
+                return -1;
+        }
+        return 0;
+}/*set_interface_attribs*/
+
+void uart_set_blocking(int fd, int should_block)
+{
+        struct termios tty;
+        memset (&tty, 0, sizeof tty);
+        if (tcgetattr(fd, &tty) != 0)
+        {
+                printf("__LINE__ = %d, error %s\n", __LINE__, strerror(errno));
+                return;
+        }
+
+        tty.c_cc[VMIN]  = should_block ? 1 : 0;
+        tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
+
+        if (tcsetattr (fd, TCSANOW, &tty) != 0)
+                 printf("__LINE__ = %d, error %s\n", __LINE__, strerror(errno));
+}
+
+static JSValue js_uart_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    
+    size_t length, res;
+    
+    // void(argc);
+    const char * uart = JS_ToCString(ctx, argv[0]);
+    uint8_t *data = JS_GetArrayBuffer(ctx, &length, argv[1]);
+    
+    int fd = open(uart, O_RDWR | O_NOCTTY | O_NDELAY | O_EXCL); 
+    // int fd = open("/dev/ttyS3", O_RDWR);
+    
+    if(0 > fd) 
+        return JS_NewString(ctx, "打开端口失败");
+    
+    int ulBaudRate = 115200;
+    int usTimerT35_50us =(ulBaudRate > 19200)?35:(( 7UL * 220000UL ) / ( 2UL * ulBaudRate ));
+    int rts_delay = usTimerT35_50us*50/1000;
+    int onebyte_time = 10/ulBaudRate;
+
+    
+    //printf("redirect %s: ", uart);
+    
+    mg_hexdump(data,length);
+    // FILE* fp = fdopen(fd, "w+");
+    // // FILE* fp = fopen( uart , "w+" );
+    // fwrite(data, 1, strlen(data), fp);  // Write to stdout
+    // //fwrite("\n", 1, 1, fp); 
+    // fflush(fp);
+    // tcflush(flieno(fp),TCIOFLUSH);
+    // //sleep(1);
+    // fclose(fp);
+    
+    //usleep(rts_delay);
+    // length = strlen(data);
+    if ((res = write(fd, data, length)) != length)
+    {
+        printf("Error writing to the file.\n");
+        exit(1);
+    }
+    
+    if ((res = write(fd, "\n", strlen("\n"))) != strlen("\n"))
+    {
+        printf("Error writing to the file.\n");
+        exit(1);
+    }
+    //usleep(onebyte_time * length + rts_delay);
+    //usleep(rts_delay);
+    tcflush(fd,TCIOFLUSH);
+    
+    close(fd);
+    
+  
+    return JS_NewString(ctx, "success");
+}
+
+
+static JSValue js_kafka_produce(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    const char * brokers = JS_ToCString(ctx, argv[0]);
+    const char * topic = JS_ToCString(ctx, argv[1]);
+    const char * payload = JS_ToCString(ctx, argv[2]);
+    size_t payload_len = sizeof(payload);
+    char errstr[512];
+
+		rd_kafka_conf_t *conf = rd_kafka_conf_new();
+    if (rd_kafka_conf_set(conf, "client.id", "rjs_server",
+                          errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
+      return JS_NewString(ctx, errstr);
+    }
+
+    /* if (rd_kafka_conf_set(conf, "bootstrap.servers", brokers,
+                          errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
+      return JS_NewString(ctx, errstr);
+    } */
+
+    /* rd_kafka_topic_conf_t *topic_conf = rd_kafka_topic_conf_new();
+
+    if (rd_kafka_topic_conf_set(topic_conf, "acks", "all",
+                          errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
+      return JS_NewString(ctx, errstr);
+    } */
+    
+    // set call back
+    // rd_kafka_conf_set_dr_msg_cb(conf, msg_delivered);
+    
+    rd_kafka_t *rdkafka;
+		/* Create Kafka handle */
+		if (!(rdkafka = rd_kafka_new(RD_KAFKA_PRODUCER, conf, errstr, sizeof(errstr)))) 
+        return JS_NewString(ctx, errstr);
+		
+
+		/* Add brokers */
+		if (rd_kafka_brokers_add(rdkafka, brokers) == 0)
+        return JS_NewString(ctx, errstr);
+
+		/* Create topic */
+		// rd_kafka_topic_t *rkt = rd_kafka_topic_new(rdkafka, topic, topic_conf);
+		rd_kafka_topic_t *rkt = rd_kafka_topic_new(rdkafka, topic, NULL);
+
+    if (rd_kafka_produce(rkt, RD_KAFKA_PARTITION_UA, RD_KAFKA_MSG_F_COPY, (char*)payload, payload_len, NULL, 0, NULL) == -1)
+        return JS_NewString(ctx, rd_kafka_err2str(rd_kafka_last_error()));
+        
+    rd_kafka_poll(rdkafka, 1000);
+
+		/* Destroy topic */
+		rd_kafka_topic_destroy(rkt);
+
+		/* Destroy the handle */
+		// rd_kafka_destroy(rdkafka);
+
+    return JS_NewString(ctx, errstr);
+}
+
+
+// sub functions map 子函数映射  
+static const JSCFunctionListEntry js_cmd_functions[] = 
+{
+    JS_CFUNC_DEF("canSend", 2, js_can_send),
+    JS_CFUNC_DEF("gpioSet", 2, js_gpio_set),
+    JS_CFUNC_DEF("kafkaProduce", 3, js_kafka_produce),
+    JS_CFUNC_DEF("uartWrite", 2, js_uart_write),
+    
+    
+    // demo 
+    /* JS_CFUNC_DEF("readVersion", 0, js_core_read),
+    JS_CFUNC_DEF("writeVersion", 1, js_core_write),
+    JS_PROP_STRING_DEF("version", version_build_string, JS_PROP_C_W_E), */
+};
+
+// init module functions list 初始化函数列表 
+static int js_cmd_init(JSContext *ctx, JSModuleDef *module)
+{
+  // demo 
+  // js_core_gen_version(); // generate version string
+  return JS_SetModuleExportList(ctx, module, js_cmd_functions, countof(js_cmd_functions));
+}
+
+// init 'cmd' module 初始化cmd模块 
+JSModuleDef *js_init_module_cmd(JSContext *ctx, const char *module_name)
+{
+  JSModuleDef *module;
+  module = JS_NewCModule(ctx, module_name, js_cmd_init);
+  if (!module)
+  {
+    return NULL;
+  }
+  JS_AddModuleExportList(ctx, module, js_cmd_functions, countof(js_cmd_functions));
+  return module;
+}
